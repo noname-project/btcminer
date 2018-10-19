@@ -1,0 +1,11 @@
+bitcoin-cli
+bitcoind
+litecoin-cli
+litecoind
+btc1
+btc2
+ltc1
+ltc2
+*.py
+*.pyc
+vendor
