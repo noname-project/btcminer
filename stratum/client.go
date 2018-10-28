@@ -14,7 +14,7 @@ import (
 
 // Client is stratum miner client.
 type Client struct {
-	url         string
+	poolAddress string
 	login       string
 	password    string
 	algorithm   Algorithm
@@ -32,7 +32,7 @@ type Client struct {
 }
 
 type ClientParams struct {
-	URL         string
+	PoolAddress string
 	Login       string
 	Password    string
 	Algorithm   Algorithm
@@ -42,7 +42,7 @@ type ClientParams struct {
 // NewClient creates new stratum client.
 func NewClient(p ClientParams) *Client {
 	return &Client{
-		url:         p.URL,
+		poolAddress: p.PoolAddress,
 		login:       p.Login,
 		password:    p.Password,
 		algorithm:   p.Algorithm,
@@ -401,7 +401,7 @@ func (c *Client) handleRPCCall(req request, res response) error {
 }
 
 func (c *Client) Serve() error {
-	conn, err := net.Dial("tcp", c.url)
+	conn, err := net.Dial("tcp", c.poolAddress)
 	if err != nil {
 		return err
 	}
