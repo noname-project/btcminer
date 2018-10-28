@@ -2,38 +2,49 @@
 
 
 [[projects]]
-  branch = "master"
-  digest = "1:95f4fdfbc8d7723bd21e467aabe98d86f06d3e2557b1ba92bf9df8aea6706784"
-  name = "github.com/btcsuite/btcutil"
-  packages = ["base58"]
-  pruneopts = "UT"
-  revision = "ab6388e0c60ae4834a1f57511e20c17b5f78be4b"
-
-[[projects]]
-  digest = "1:564b31f09a21367ada5b019d8413afe99cf770775606f94c7bef42b2ef79dfdf"
-  name = "github.com/ybbus/jsonrpc"
+  digest = "1:0a69a1c0db3591fcefb47f115b224592c8dfa4368b7ba9fae509d5e16cdc95c8"
+  name = "github.com/konsorten/go-windows-terminal-sequences"
   packages = ["."]
   pruneopts = "UT"
-  revision = "dd866631e904a5df2067d934985c5def68f391ac"
-  version = "v2.1.2"
+  revision = "5c8c8bd35d3832f5d134ae1e1e375b69a4d25242"
+  version = "v1.0.1"
+
+[[projects]]
+  digest = "1:3f53e9e4dfbb664cd62940c9c4b65a2171c66acd0b7621a1a6b8e78513525a52"
+  name = "github.com/sirupsen/logrus"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "ad15b42461921f1fb3529b058c6786c6a45d5162"
+  version = "v1.1.1"
 
 [[projects]]
   branch = "master"
-  digest = "1:29672ea8ec3ef342d345f668d47666e45366b7691080ee4c07bf4851f4fa8864"
+  digest = "1:69b3fcb7a41b18436a85471cbdcfc70ad10ba3206f8c87563e1c773610e1bcad"
   name = "golang.org/x/crypto"
   packages = [
     "pbkdf2",
     "scrypt",
+    "ssh/terminal",
   ]
   pruneopts = "UT"
-  revision = "0c41d7ab0a0ee717d4590a44bcb987dfd9e183eb"
+  revision = "e84da0312774c21d64ee2317962ef669b27ffb41"
+
+[[projects]]
+  branch = "master"
+  digest = "1:d2605ed96ca0244a457fa8e6c37d5c370ce98ea09dcc21e5e07d967bfcb78878"
+  name = "golang.org/x/sys"
+  packages = [
+    "unix",
+    "windows",
+  ]
+  pruneopts = "UT"
+  revision = "95b1ffbd15a57cc5abb3f04402b9e8ec0016a52c"
 
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
   input-imports = [
-    "github.com/btcsuite/btcutil/base58",
-    "github.com/ybbus/jsonrpc",
+    "github.com/sirupsen/logrus",
     "golang.org/x/crypto/scrypt",
   ]
   solver-name = "gps-cdcl"

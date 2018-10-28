@@ -25,18 +25,14 @@
 #   unused-packages = true
 
 
-[prune]
-  go-tests = true
-  unused-packages = true
-
 [[constraint]]
-  name = "github.com/ybbus/jsonrpc"
-  version = "2.1.2"
-
-[[constraint]]
-  branch = "master"
-  name = "github.com/btcsuite/btcutil"
+  name = "github.com/sirupsen/logrus"
+  version = "1.1.1"
 
 [[constraint]]
   branch = "master"
   name = "golang.org/x/crypto"
+
+[prune]
+  go-tests = true
+  unused-packages = true
