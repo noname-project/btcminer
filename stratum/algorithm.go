@@ -1,11 +1,19 @@
 package stratum
 
-type Algorithm int
+import (
+	"errors"
+)
+
+type Algorithm string
 
 const (
-	SHA256d Algorithm = iota
-	Scrypt
+	SHA256d Algorithm = "sha256d"
+	Scrypt  Algorithm = "scrypt"
 )
+
+func (a Algorithm) String() string {
+	return string(a)
+}
 
 func (a Algorithm) hashFunc() func([]byte) []byte {
 	switch a {
@@ -15,4 +23,14 @@ func (a Algorithm) hashFunc() func([]byte) []byte {
 		return scryptHash
 	}
 	panic("algorithm hash function not defined in switch above")
+}
+
+func ParseAlgorithm(s string) (Algorithm, error) {
+	switch s {
+	case SHA256d.String():
+		return SHA256d, nil
+	case Scrypt.String():
+		return Scrypt, nil
+	}
+	return Algorithm("unknown"), errors.New("unknown algorithm")
 }
