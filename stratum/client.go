@@ -176,12 +176,14 @@ func (c *Client) handleIncomingJSONLines() (err error) {
 		if err != nil {
 			logrus.WithError(err).Error(
 				"Failed to unmarshal JSON RPC line")
+			return err
 		}
 
 		err = c.handleRPCCall(req, res)
 		if err != nil {
 			logrus.WithError(err).Error(
 				"Error occurred during handing JSON RPC call")
+			return err
 		}
 	}
 	return nil
