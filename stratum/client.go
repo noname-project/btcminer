@@ -169,8 +169,8 @@ func (c *Client) handleIncomingJSONLines() (err error) {
 			JSONLine = append(JSONLine, line...)
 		}
 
-		//logrus.WithField("JSONLine", string(JSONLine)).
-		//	Debug("New JSON RPC line")
+		logrus.WithField("JSONLine", string(JSONLine)).
+			Debug("New JSON RPC line")
 
 		req, res, err := c.unmarshalJSONLine(JSONLine)
 		if err != nil {
