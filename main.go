@@ -63,6 +63,7 @@ func main() {
 			Name: "verbosity, vs",
 			Usage: "logger verbosity level, one of: debug, info, warn, error" +
 				", fatal, panic",
+			Value: "info",
 		},
 	}
 
