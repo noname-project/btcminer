@@ -5,6 +5,7 @@ import (
 	"os"
 	"runtime"
 
+	"github.com/boomstarternetwork/btcminer/miner"
 	"github.com/boomstarternetwork/btcminer/stratum"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli"
@@ -31,7 +32,7 @@ func main() {
 	app.Email = "v.chernov@boomstarter.ru"
 	app.Version = "0.1"
 
-	app.Action = miner
+	app.Action = minerAction
 
 	app.Flags = []cli.Flag{
 		cli.StringFlag{
@@ -71,7 +72,7 @@ func main() {
 	}
 }
 
-func miner(c *cli.Context) error {
+func minerAction(c *cli.Context) error {
 	poolAddress := c.String("pool-address")
 	login := c.String("login")
 	password := c.String("password")
@@ -79,7 +80,7 @@ func miner(c *cli.Context) error {
 	minersCount := c.Uint("miners-count")
 	verbosity := c.String("verbosity")
 
-	algorithm, err := stratum.ParseAlgorithm(algorithmStr)
+	algorithm, err := miner.ParseAlgorithm(algorithmStr)
 	if err != nil {
 		return cli.NewExitError("failed to parse algorithm: "+err.Error(), 1)
 	}

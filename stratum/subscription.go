@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"math/big"
 	"sync"
+
+	"github.com/boomstarternetwork/btcminer/miner"
 )
 
 // subscription is a stratum subscription.
@@ -15,9 +17,10 @@ type subscription struct {
 	target            string
 	difficulty        float64
 
+	// minersCount is a miner goroutines count
 	minersCount uint
 
-	job *job
+	miner Miner
 
 	mutex sync.Mutex
 }
@@ -31,6 +34,14 @@ func (s *subscription) set(subID string, extraNonce1 string,
 	s.id = subID
 	s.extraNonce1 = extraNonce1
 	s.extraNonce2Length = extraNonce2Length
+}
+
+func bigFloatExp(f *big.Float, exp int) *big.Float {
+	fexp := big.NewFloat(0).Copy(f)
+	for i := 1; i < exp; i++ {
+		fexp.Mul(fexp, f)
+	}
+	return fexp
 }
 
 // setDifficulty set mining difficulty and computes target.
@@ -64,43 +75,37 @@ func (s *subscription) setDifficulty(difficulty float64) error {
 	return nil
 }
 
-// newJob creates new job with given job params, filled with
+// newMiner creates new miner with given miner params, filled with
 // subscription params, and mining goroutines count.
-func (s *subscription) newJob(p jobParams) (chan Share, error) {
+func (s *subscription) newMiner(p miner.Params) (chan miner.Share, error) {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
-	if s.job != nil {
-		s.job.stop()
+	if s.miner != nil {
+		s.miner.Stop()
 	}
 
-	p.target = s.target
-	p.extraNonce1 = s.extraNonce1
-	p.extraNonce2Length = s.extraNonce2Length
+	p.Target = s.target
+	p.ExtraNonce1 = s.extraNonce1
+	p.ExtraNonce2Length = s.extraNonce2Length
 
 	var err error
 
-	s.job, err = newJob(p)
+	s.miner, err = miner.NewBTCMiner(p)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create new job: %v", err)
+		return nil, fmt.Errorf("failed to create new miner: %v", err)
 	}
 
-	s.job.mine()
+	s.miner.Mine()
 
-	return s.job.shares, nil
+	return s.miner.Shares(), nil
 }
 
-func (s *subscription) stopJob() {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
-	s.job = nil
+func (s *subscription) continueMine() chan miner.Share {
+	s.miner.Mine()
+	return s.miner.Shares()
 }
 
-func (s *subscription) continueJob() chan Share {
-	s.job.mine()
-	return s.job.shares
-}
-
-func (s *subscription) noJob() bool {
-	return s.job == nil
+func (s *subscription) noMiner() bool {
+	return s.miner == nil
 }

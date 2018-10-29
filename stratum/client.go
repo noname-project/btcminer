@@ -9,6 +9,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/boomstarternetwork/btcminer/miner"
+
 	"github.com/sirupsen/logrus"
 )
 
@@ -17,14 +19,14 @@ type Client struct {
 	poolAddress string
 	login       string
 	password    string
-	algorithm   Algorithm
+	algorithm   miner.Algorithm
 	minersCount uint
 
 	connection net.Conn
 	messageID  uint
 
-	requests        map[uint]request
-	latestJobParams jobParams
+	requests          map[uint]request
+	latestMinerParams miner.Params
 
 	subscription *subscription
 
@@ -35,7 +37,7 @@ type ClientParams struct {
 	PoolAddress string
 	Login       string
 	Password    string
-	Algorithm   Algorithm
+	Algorithm   miner.Algorithm
 	MinersCount uint
 }
 
@@ -285,24 +287,24 @@ func (c *Client) handleRPCCall(req request, res response) error {
 		}
 
 		var ok bool
-		var jp jobParams
+		var mp miner.Params
 
-		jp.jobID, ok = req.Params[0].(string)
+		mp.JobID, ok = req.Params[0].(string)
 		if !ok {
 			return errors.New("failed to cast jobID")
 		}
 
-		jp.prevHash, ok = req.Params[1].(string)
+		mp.PrevHash, ok = req.Params[1].(string)
 		if !ok {
 			return errors.New("failed to cast prevHash")
 		}
 
-		jp.coinb1, ok = req.Params[2].(string)
+		mp.Coinb1, ok = req.Params[2].(string)
 		if !ok {
 			return errors.New("failed to cast coinb1")
 		}
 
-		jp.coinb2, ok = req.Params[3].(string)
+		mp.Coinb2, ok = req.Params[3].(string)
 		if !ok {
 			return errors.New("failed to cast coinb2")
 		}
@@ -317,45 +319,40 @@ func (c *Client) handleRPCCall(req request, res response) error {
 			if !ok {
 				return errors.New("failed to cast merkle branch")
 			}
-			jp.merkleBranches = append(jp.merkleBranches, mbStr)
+			mp.MerkleBranches = append(mp.MerkleBranches, mbStr)
 		}
 
-		jp.version, ok = req.Params[5].(string)
+		mp.Version, ok = req.Params[5].(string)
 		if !ok {
 			return errors.New("failed to cast version")
 		}
 
-		jp.nbits, ok = req.Params[6].(string)
+		mp.Nbits, ok = req.Params[6].(string)
 		if !ok {
 			return errors.New("failed to cast nbits")
 		}
 
-		jp.ntime, ok = req.Params[7].(string)
+		mp.Ntime, ok = req.Params[7].(string)
 		if !ok {
 			return errors.New("failed to cast ntime")
 		}
 
-		jp.hashFunc = c.algorithm.hashFunc()
-		jp.minersCount = c.minersCount
+		mp.Algorithm = c.algorithm
+		mp.MinersCount = c.minersCount
 
-		c.latestJobParams = jp
+		c.latestMinerParams = mp
 
 		cleanJobs, ok := req.Params[8].(bool)
 		if !ok {
 			return errors.New("failed to cast cleanJobs")
 		}
 
-		if cleanJobs || c.subscription.noJob() {
-			shares, err := c.subscription.newJob(jp)
+		if cleanJobs || c.subscription.noMiner() {
+			shares, err := c.subscription.newMiner(mp)
 			if err != nil {
 				return err
 			}
-
-			go func() {
-				s := <-shares
-				c.call(methodSubmit, c.login, s.JobID, s.ExtraNonce2,
-					s.Ntime, s.Nonce)
-			}()
+			go c.handleShares(shares)
 		}
 
 	case methodSubmit:
@@ -369,25 +366,16 @@ func (c *Client) handleRPCCall(req request, res response) error {
 			switch res.Error.Code {
 			case errCodeJobNotFound:
 				// We need to start new job with latest params.
-				shares, err := c.subscription.newJob(c.latestJobParams)
+				shares, err := c.subscription.newMiner(c.latestMinerParams)
 				if err != nil {
 					return err
 				}
-
-				go func() {
-					s := <-shares
-					c.call(methodSubmit, c.login, s.JobID, s.ExtraNonce2,
-						s.Ntime, s.Nonce)
-				}()
+				go c.handleShares(shares)
 
 			default:
 				// By default we just continue to mine current job.
-				shares := c.subscription.continueJob()
-				go func() {
-					s := <-shares
-					c.call(methodSubmit, c.login, s.JobID, s.ExtraNonce2,
-						s.Ntime, s.Nonce)
-				}()
+				shares := c.subscription.continueMine()
+				go c.handleShares(shares)
 			}
 		}
 
@@ -398,6 +386,12 @@ func (c *Client) handleRPCCall(req request, res response) error {
 		}
 	}
 	return nil
+}
+
+func (c *Client) handleShares(shares chan miner.Share) {
+	s := <-shares
+	c.call(methodSubmit, c.login, s.JobID, s.ExtraNonce2,
+		s.Ntime, s.Nonce)
 }
 
 func (c *Client) Serve() error {

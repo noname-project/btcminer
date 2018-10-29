@@ -1,19 +1,33 @@
-package stratum
+package miner
 
 import (
 	"crypto/sha256"
 	"encoding/binary"
-	"math/big"
 
 	"golang.org/x/crypto/scrypt"
 )
 
-func bigFloatExp(f *big.Float, exp int) *big.Float {
-	fexp := big.NewFloat(0).Copy(f)
-	for i := 1; i < exp; i++ {
-		fexp.Mul(fexp, f)
+// sha256dHash is double sha256 hashing function
+func sha256dHash(data []byte) []byte {
+	h1 := sha256.Sum256(data)
+	h2 := sha256.Sum256(h1[:])
+	return h2[:]
+}
+
+// scryptHash is scrypt hashing function used in litecoin
+func scryptHash(data []byte) []byte {
+	// https://litecoin.info/index.php/Scrypt
+	// Litecoin uses the following values for the call to scrypt:
+	//    N = 1024;
+	//    r = 1;
+	//    p = 1;
+	//    salt is the same 80 bytes as the input
+	//    output is 256 bits (32 bytes)
+	hashBytes, err := scrypt.Key(data, data, 1024, 1, 1, 32)
+	if err != nil {
+		panic(err)
 	}
-	return fexp
+	return hashBytes
 }
 
 func restorePrevHashByteOrder(prevHash []byte) []byte {
@@ -46,27 +60,4 @@ func uint32ToLeBytes(i uint32) []byte {
 	bytes := make([]byte, 4)
 	binary.LittleEndian.PutUint32(bytes, i)
 	return bytes
-}
-
-// sha256dHash is double sha256 hashing function
-func sha256dHash(data []byte) []byte {
-	h1 := sha256.Sum256(data)
-	h2 := sha256.Sum256(h1[:])
-	return h2[:]
-}
-
-// scryptHash is scrypt hashing function used in litecoin
-func scryptHash(data []byte) []byte {
-	// https://litecoin.info/index.php/Scrypt
-	// Litecoin uses the following values for the call to scrypt:
-	//    N = 1024;
-	//    r = 1;
-	//    p = 1;
-	//    salt is the same 80 bytes as the input
-	//    output is 256 bits (32 bytes)
-	hashBytes, err := scrypt.Key(data, data, 1024, 1, 1, 32)
-	if err != nil {
-		panic(err)
-	}
-	return hashBytes
 }
