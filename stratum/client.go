@@ -1,16 +1,12 @@
 package stratum
 
 import (
-	"bufio"
-	"encoding/json"
 	"errors"
-	"fmt"
 	"net"
-	"sync"
 	"time"
 
 	"github.com/boomstarternetwork/btcminer/miner"
-
+	"github.com/boomstarternetwork/stratum"
 	"github.com/sirupsen/logrus"
 )
 
@@ -22,17 +18,14 @@ type Client struct {
 	algorithm   miner.Algorithm
 	minersCount uint
 
-	connection net.Conn
-	messageID  uint
-
-	requests          map[uint]request
 	latestMinerParams miner.Params
 
-	subscription *subscription
+	client *stratum.BitcoinClient
 
-	mutex sync.RWMutex
+	subscription *subscription
 }
 
+// ClientParams is a params required to start stratum miner client.
 type ClientParams struct {
 	PoolAddress string
 	Login       string
@@ -49,384 +42,148 @@ func NewClient(p ClientParams) *Client {
 		password:    p.Password,
 		algorithm:   p.Algorithm,
 		minersCount: p.MinersCount,
-		requests:    map[uint]request{},
 		subscription: &subscription{
 			minersCount: p.MinersCount,
 		},
 	}
 }
 
-func (c *Client) request(messageID uint) (request, bool) {
-	c.mutex.RLock()
-	defer c.mutex.RUnlock()
-	req, exists := c.requests[messageID]
-	return req, exists
-}
-
-func (c *Client) storeRequest(req request) {
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
-	c.requests[req.ID] = req
-}
-
-func (c *Client) removeRequest(messageID uint) {
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
-	delete(c.requests, messageID)
-}
-
-// call calls pool JSON RPC method with given params. It registers
-// request in requests map under current messageID to handle answer
-// later.
-func (c *Client) call(method string, params ...interface{}) error {
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
-
-	logrus.WithFields(logrus.Fields{
-		"method": method,
-		"params": params,
-	}).Info("Calling JSON RPC")
-
-	if c.connection == nil {
-		return errors.New("connection is nil")
-	}
-
-	req := request{
-		ID:     c.messageID,
-		Method: method,
-		Params: params,
-	}
-
-	reqJSON, err := json.Marshal(req)
-	if err != nil {
-		return err
-	}
-
-	reqJSON = append(reqJSON, '\n')
-
-	writtenBytes := 0
-	for writtenBytes != len(reqJSON) {
-		n, err := c.connection.Write(reqJSON[writtenBytes:])
-		if err != nil {
-			return err
-		}
-		writtenBytes += n
-	}
-
-	c.requests[c.messageID] = req
-
-	c.messageID++
-
-	return nil
-}
-
-// unmarshalJSONLine unmarshal JSON RPC line, checks if it request or response
-// and gets corresponding request if line is response.
-func (c *Client) unmarshalJSONLine(JSONLine []byte) (request, response, error) {
-	var (
-		req request
-		res response
-	)
-
-	err := json.Unmarshal(JSONLine, &req)
-	if err != nil || req.Method == "" {
-
-		err := json.Unmarshal(JSONLine, &res)
-		if err != nil {
-			return req, res,
-				errors.New("failed to unmarshal JSON line to neither" +
-					" request nor response")
-		}
-
-		var exists bool
-
-		req, exists = c.request(res.ID)
-		if !exists {
-			return req, res,
-				errors.New("can't find response's corresponding request")
-		}
-
-		c.removeRequest(res.ID)
-	}
-
-	return req, res, nil
-}
-
-// handleIncomingJSONLines handles connection's incoming JSON lines.
-func (c *Client) handleIncomingJSONLines() (err error) {
-	r := bufio.NewReader(c.connection)
-	for {
-		var (
-			isPrefix = true
-			JSONLine []byte
-		)
-		for isPrefix {
-			var line []byte
-			line, isPrefix, err = r.ReadLine()
-			if err != nil {
-				return err
-			}
-			JSONLine = append(JSONLine, line...)
-		}
-
-		logrus.WithField("JSONLine", string(JSONLine)).
-			Debug("New JSON RPC line")
-
-		req, res, err := c.unmarshalJSONLine(JSONLine)
-		if err != nil {
-			logrus.WithError(err).Error(
-				"Failed to unmarshal JSON RPC line")
-			return err
-		}
-
-		err = c.handleRPCCall(req, res)
-		if err != nil {
-			logrus.WithError(err).Error(
-				"Error occurred during handing JSON RPC call")
-			return err
-		}
-	}
-	return nil
-}
-
 const (
-	methodSubscribe     = "mining.subscribe"
-	methodAuthorize     = "mining.authorize"
-	methodNotify        = "mining.notify"
-	methodSetDifficulty = "mining.set_difficulty"
-	methodSubmit        = "mining.submit"
+	agent = "btcminer/0.1"
 
 	errCodeJobNotFound = 21
 )
 
-func (c *Client) handleRPCCall(req request, res response) error {
-
-	logrus.WithFields(logrus.Fields{
-		"req": req,
-		"res": res,
-	}).Info("Handling RPC call")
-
-	switch req.Method {
-	case methodAuthorize:
-		// this is outgoing request, we need to handle response
-		if res.Error != nil {
-			return errors.New("response error: " + res.Error.Message)
-		}
-		if !res.Result.(bool) {
-			return fmt.Errorf("failed to authorize")
-		}
-
-		err := c.call(methodSubscribe, "btcminer/0.1")
-		if err != nil {
-			return err
-		}
-
-	case methodSubscribe:
-		// this is outgoing request, we need to handle response
-		if res.Error != nil {
-			return errors.New("response error: " + res.Error.Message)
-		}
-		result, ok := res.Result.([]interface{})
-		if !ok {
-			return errors.New("failed to cast response result")
-		}
-
-		if len(result) != 3 {
-			return errors.New("expected response result array length is 3")
-		}
-
-		subscriptionIDArray, ok := result[0].([]interface{})
-		if !ok {
-			return errors.New("failed to cast subscription ID array")
-		}
-
-		subscriptionIDArray, ok = subscriptionIDArray[0].([]interface{})
-		if !ok {
-			return errors.New("failed to cast subscription ID array")
-		}
-
-		subscriptionID, ok := subscriptionIDArray[1].(string)
-		if !ok {
-			return errors.New("failed to cast subscription ID")
-		}
-
-		extraNonce1, ok := result[1].(string)
-		if !ok {
-			return errors.New("failed to cast extraNonce1")
-		}
-
-		extraNonce2Length, ok := result[2].(float64)
-		if !ok {
-			return errors.New("failed to cast extraNonce2Length")
-		}
-
-		c.subscription.set(subscriptionID, extraNonce1,
-			uint(extraNonce2Length))
-
-	case methodSetDifficulty:
-		// this is incoming request, we need to handle request
-		if res.Error != nil {
-			return errors.New("response error: " + res.Error.Message)
-		}
-		if len(req.Params) != 1 {
-			return fmt.Errorf("expected request params length is 1")
-		}
-
-		difficulty, ok := req.Params[0].(float64)
-		if !ok {
-			return errors.New("failed to cast difficulty")
-		}
-
-		c.subscription.setDifficulty(difficulty)
-
-	case methodNotify:
-		// this is incoming request, we need to handle request
-		if res.Error != nil {
-			return errors.New("response error: " + res.Error.Message)
-		}
-		if len(req.Params) != 9 {
-			return fmt.Errorf("expected request params length is 9")
-		}
-
-		var ok bool
-		var mp miner.Params
-
-		mp.JobID, ok = req.Params[0].(string)
-		if !ok {
-			return errors.New("failed to cast jobID")
-		}
-
-		mp.PrevHash, ok = req.Params[1].(string)
-		if !ok {
-			return errors.New("failed to cast prevHash")
-		}
-
-		mp.Coinb1, ok = req.Params[2].(string)
-		if !ok {
-			return errors.New("failed to cast coinb1")
-		}
-
-		mp.Coinb2, ok = req.Params[3].(string)
-		if !ok {
-			return errors.New("failed to cast coinb2")
-		}
-
-		merkleBranches, ok := req.Params[4].([]interface{})
-		if !ok {
-			return errors.New("failed to cast merkleBranches")
-		}
-
-		for _, mb := range merkleBranches {
-			mbStr, ok := mb.(string)
-			if !ok {
-				return errors.New("failed to cast merkle branch")
-			}
-			mp.MerkleBranches = append(mp.MerkleBranches, mbStr)
-		}
-
-		mp.Version, ok = req.Params[5].(string)
-		if !ok {
-			return errors.New("failed to cast version")
-		}
-
-		mp.Nbits, ok = req.Params[6].(string)
-		if !ok {
-			return errors.New("failed to cast nbits")
-		}
-
-		mp.Ntime, ok = req.Params[7].(string)
-		if !ok {
-			return errors.New("failed to cast ntime")
-		}
-
-		mp.Algorithm = c.algorithm
-		mp.MinersCount = c.minersCount
-
-		c.latestMinerParams = mp
-
-		cleanJobs, ok := req.Params[8].(bool)
-		if !ok {
-			return errors.New("failed to cast cleanJobs")
-		}
-
-		if cleanJobs || c.subscription.noMiner() {
-			shares, err := c.subscription.newMiner(mp)
-			if err != nil {
-				return err
-			}
-			go c.handleShares(shares)
-		}
-
-	case methodSubmit:
-		// this is outgoing request, we need to handle response
-		if res.Error != nil {
-			logrus.WithFields(logrus.Fields{
-				"errCode": res.Error.Code,
-				"err":     res.Error.Message,
-			}).Error("Failed to submit share")
-
-			switch res.Error.Code {
-			case errCodeJobNotFound:
-				// We need to start new job with latest params.
-				shares, err := c.subscription.newMiner(c.latestMinerParams)
-				if err != nil {
-					return err
-				}
-				go c.handleShares(shares)
-
-			default:
-				// By default we just continue to mine current job.
-				shares := c.subscription.continueMine()
-				go c.handleShares(shares)
-			}
-		}
-
-	default:
-		if req.Method != "" {
-			logrus.WithField("method", req.Method).
-				Warn("Unsupported method call")
-		}
-	}
-	return nil
-}
-
-func (c *Client) handleShares(shares chan miner.Share) {
-	s := <-shares
-	c.call(methodSubmit, c.login, s.JobID, s.ExtraNonce2,
-		s.Ntime, s.Nonce)
-}
-
+// Serve starts mining.
 func (c *Client) Serve() error {
 	conn, err := net.Dial("tcp", c.poolAddress)
 	if err != nil {
 		return err
 	}
 
-	c.connection = conn
+	c.client = stratum.NewBitcoinClient(conn, c)
 
-	go c.handleIncomingJSONLines()
+	logrus.Debug("Authorizing...")
 
-	err = c.call(methodAuthorize, c.login, c.password)
+	authorized, err := c.client.Authorize(&stratum.LoginParams{
+		User:     c.login,
+		Password: c.password,
+	})
 	if err != nil {
-		return err
+		return errors.New("failed to authorize: " + err.Error())
 	}
+	if !authorized {
+		return errors.New("failed to authorize: pool returned false")
+	}
+
+	logrus.Debug("Authorized")
+
+	logrus.Debug("Subscribing...")
+
+	res, err := c.client.Subscribe(&stratum.SubscribeBitcoinParams{
+		Agent:      agent,
+		ExtraNonce: "-",
+	})
+	if err != nil {
+		return errors.New("failed to subscribe: " + err.Error())
+	}
+
+	c.subscription.set(res.Subscriptions[0].ID, res.ExtraNonce,
+		uint(res.ExtraNonceSize))
+
+	logrus.Debug("Subscribed")
 
 	for {
 		time.Sleep(1 * time.Hour)
 	}
 }
 
-type request struct {
-	ID     uint          `json:"id"`
-	Method string        `json:"method"`
-	Params []interface{} `json:"params"`
+func (c *Client) OnReconnect(params *stratum.ReconnectParams) {
+	logrus.WithField("params", params).Debug("Reconnect server call")
 }
 
-type response struct {
-	ID     uint        `json:"id"`
-	Result interface{} `json:"result"`
-	Error  *struct {
-		Code    uint   `json:"code"`
-		Message string `json:"message"`
-	} `json:"error"`
+func (c *Client) OnShowMessage(msg string) {
+	logrus.WithField("msg", msg).Debug("Show message server call")
+}
+
+func (c *Client) OnSetDifficulty(difficulty float64) {
+	logrus.WithField("difficulty",
+		difficulty).Debug("Set difficulty server call")
+
+	c.subscription.setDifficulty(difficulty)
+}
+
+func (c *Client) OnSetExtraNonce(params *stratum.ExtraNonceParams) {
+	logrus.WithField("params", params).Debug("Set extra nonce server call")
+}
+
+func (c *Client) OnNotify(params *stratum.NotifyBitcoinData) {
+	logrus.WithField("params", params).Debug("Notify server call")
+
+	mp := miner.Params{
+		JobID:          params.JobID,
+		PrevHash:       params.PrevHash,
+		Coinb1:         params.CoinBasePart1,
+		Coinb2:         params.CoinBasePart2,
+		MerkleBranches: params.MerkleBranch,
+		Version:        params.Version,
+		Nbits:          params.NBits,
+		Ntime:          params.NTime,
+		Algorithm:      c.algorithm,
+		MinersCount:    c.minersCount,
+	}
+
+	c.latestMinerParams = mp
+
+	if params.CleanJobs || c.subscription.noMiner() {
+		c.startMiner(mp)
+	}
+}
+
+func (c *Client) startMiner(mp miner.Params) {
+	logrus.Debug("Starting miner...")
+
+	shares, err := c.subscription.newMiner(mp)
+	if err != nil {
+		logrus.WithError(err).Error("Failed to create new miner")
+	}
+
+	logrus.Debug("Miner started")
+
+	go c.handleShares(shares)
+}
+
+func (c *Client) handleShares(shares chan miner.Share) {
+	s := <-shares
+
+	logrus.WithField("share", s).Info("Found share, submitting...")
+
+	submitted, err := c.client.Submit(&stratum.SubmitBitcoinParams{
+		User:       c.login,
+		JobID:      s.JobID,
+		ExtraNonce: s.ExtraNonce2,
+		NTime:      s.Ntime,
+		NOnce:      s.Nonce,
+	})
+
+	if submitted {
+		logrus.Info("Share submitted")
+	} else if err == nil {
+		logrus.Info("Share not submitted")
+	} else {
+		logrus.WithError(err).Error("Failed to submit share")
+
+		if resErr, ok := err.(*stratum.ResponseError); ok {
+			if resErr.Code() == errCodeJobNotFound {
+				// We need to start new job with latest params.
+				c.startMiner(c.latestMinerParams)
+				return
+			}
+		}
+
+		// By default we just continue to mine current job.
+		logrus.Info("Continue to mine...")
+		shares := c.subscription.continueMine()
+		go c.handleShares(shares)
+	}
 }
