@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/sirupsen/logrus"
 )
@@ -47,6 +48,11 @@ type BTCMiner struct {
 	// shares is a channel with mining shares which can be submitted as
 	// share to the pool.
 	shares chan Share
+
+	// metrics data
+	metricsLoggerRunning  bool
+	metricsStartTime      time.Time
+	metricsHashesCounters []uint64
 }
 
 func NewBTCMiner(p Params) (*BTCMiner, error) {
@@ -181,7 +187,6 @@ type minerParams struct {
 //
 // For single processor you can use nonceStart=0 and nonceStride=1.
 //
-// TODO: metrics.
 // TODO: variable ExtraNonce2Length.
 func (m *BTCMiner) miner(nonceStart uint32, nonceStride uint) {
 	minerID := fmt.Sprintf("%d:%d", nonceStart, nonceStride)
@@ -222,14 +227,10 @@ func (m *BTCMiner) miner(nonceStart uint32, nonceStride uint) {
 
 				headerHash := m.hashFunc(header)
 
+				atomic.AddUint64(&m.metricsHashesCounters[nonceStart], 1)
+
 				if m.reachTarget(headerHash) {
 					m.stopMining.Store(true)
-
-					logrus.WithFields(logrus.Fields{
-						"minerID":     minerID,
-						"extraNonce2": extraNonce2,
-						"nonce":       nonce,
-					}).Debug("Miner found share")
 
 					m.shares <- newShare(m.jobID, extraNonce2Bytes, m.ntime,
 						nonceBytes)
@@ -251,6 +252,34 @@ func (m *BTCMiner) miner(nonceStart uint32, nonceStride uint) {
 	}()
 }
 
+func (m *BTCMiner) metricsLogger() {
+	m.metricsLoggerRunning = true
+
+	for {
+		time.Sleep(10 * time.Second)
+
+		if m.stopMining.Load().(bool) {
+			break
+		}
+
+		elapsed := time.Now().Sub(m.metricsStartTime)
+
+		var hashes uint64
+		for i := uint(0); i < m.minersCount; i++ {
+			hashes += atomic.LoadUint64(&m.metricsHashesCounters[i])
+			atomic.StoreUint64(&m.metricsHashesCounters[i], 0)
+		}
+
+		m.metricsStartTime = time.Now()
+
+		hashRate := float64(hashes) / elapsed.Seconds() / 1000 / 1000
+
+		logrus.Infof("Hash rate is %0.2g MH/s", hashRate)
+	}
+
+	m.metricsLoggerRunning = false
+}
+
 // Shares return shares channel
 func (m *BTCMiner) Shares() chan Share {
 	return m.shares
@@ -259,9 +288,17 @@ func (m *BTCMiner) Shares() chan Share {
 // Mine starts miner, runs mining goroutines.
 func (m *BTCMiner) Mine() {
 	m.shares = make(chan Share)
+
 	m.stopMining.Store(false)
-	for i := uint(0); i < m.minersCount; i++ {
-		go m.miner(uint32(i), m.minersCount)
+
+	if !m.metricsLoggerRunning {
+		m.metricsHashesCounters = make([]uint64, m.minersCount)
+		m.metricsStartTime = time.Now()
+		go m.metricsLogger()
+	}
+
+	for i := uint32(0); i < uint32(m.minersCount); i++ {
+		go m.miner(i, m.minersCount)
 	}
 }
 
