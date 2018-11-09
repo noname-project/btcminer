@@ -2,6 +2,35 @@
 
 
 [[projects]]
+  digest = "1:be0a5683de8b656992a8e6e8ef1c306be2956eb802af591850f621ddaeebb6dd"
+  name = "bitbucket.org/creachadair/jrpc2"
+  packages = [
+    ".",
+    "channel",
+    "code",
+    "metrics",
+  ]
+  pruneopts = "UT"
+  revision = "07fc6df9243b81e6def779df5786a88c17dd0502"
+  version = "v0.0.30"
+
+[[projects]]
+  digest = "1:23cfa40250e577a38756c31f9669175b3481f31be53d7703e4d292f5ae78196a"
+  name = "bitbucket.org/creachadair/stringset"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "f00feb9f89a58c9610381310efb048d121923a81"
+  version = "v0.0.3"
+
+[[projects]]
+  branch = "master"
+  digest = "1:7418a3dfcfdba70216ab4c28bd4ccefd29c81a2bfd2a35efd6502bcbe85101c2"
+  name = "github.com/boomstarternetwork/stratum"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "addfd6c335ffa00cf5ca02be1c5c62c15c279e61"
+
+[[projects]]
   digest = "1:0a69a1c0db3591fcefb47f115b224592c8dfa4368b7ba9fae509d5e16cdc95c8"
   name = "github.com/konsorten/go-windows-terminal-sequences"
   packages = ["."]
@@ -10,12 +39,12 @@
   version = "v1.0.1"
 
 [[projects]]
-  digest = "1:3f53e9e4dfbb664cd62940c9c4b65a2171c66acd0b7621a1a6b8e78513525a52"
+  digest = "1:69b1cc331fca23d702bd72f860c6a647afd0aa9fcbc1d0659b1365e26546dd70"
   name = "github.com/sirupsen/logrus"
   packages = ["."]
   pruneopts = "UT"
-  revision = "ad15b42461921f1fb3529b058c6786c6a45d5162"
-  version = "v1.1.1"
+  revision = "bcd833dfe83d3cebad139e4a29ed79cb2318bf95"
+  version = "v1.2.0"
 
 [[projects]]
   digest = "1:b24d38b282bacf9791408a080f606370efa3d364e4b5fd9ba0f7b87786d3b679"
@@ -27,7 +56,7 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:69b3fcb7a41b18436a85471cbdcfc70ad10ba3206f8c87563e1c773610e1bcad"
+  digest = "1:15e78183e2b04229a20cf384c2d911812970727ba34800fbe18cd35005a529fa"
   name = "golang.org/x/crypto"
   packages = [
     "pbkdf2",
@@ -35,23 +64,32 @@
     "ssh/terminal",
   ]
   pruneopts = "UT"
-  revision = "e84da0312774c21d64ee2317962ef669b27ffb41"
+  revision = "e4dc69e5b2fd71dcaf8bd5d054eb936deb78d1fa"
 
 [[projects]]
   branch = "master"
-  digest = "1:d2605ed96ca0244a457fa8e6c37d5c370ce98ea09dcc21e5e07d967bfcb78878"
+  digest = "1:5e4d81c50cffcb124b899e4f3eabec3930c73532f0096c27f94476728ba03028"
+  name = "golang.org/x/sync"
+  packages = ["semaphore"]
+  pruneopts = "UT"
+  revision = "42b317875d0fa942474b76e1b46a6060d720ae6e"
+
+[[projects]]
+  branch = "master"
+  digest = "1:6a875550c3b582f6c2d7e2ce44aba792511f00016d7c46b0a4fb26f730ef3058"
   name = "golang.org/x/sys"
   packages = [
     "unix",
     "windows",
   ]
   pruneopts = "UT"
-  revision = "95b1ffbd15a57cc5abb3f04402b9e8ec0016a52c"
+  revision = "66b7b1311ac80bbafcd2daeef9a5e6e2cd1e2399"
 
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
   input-imports = [
+    "github.com/boomstarternetwork/stratum",
     "github.com/sirupsen/logrus",
     "github.com/urfave/cli",
     "golang.org/x/crypto/scrypt",
