@@ -272,9 +272,20 @@ func (m *BTCMiner) metricsLogger() {
 
 		m.metricsStartTime = time.Now()
 
-		hashRate := float64(hashes) / elapsed.Seconds() / 1000 / 1000
+		hashRate := float64(hashes) / elapsed.Seconds()
+		valueStr := "H/s"
 
-		logrus.Infof("Hash rate is %0.2g MH/s", hashRate)
+		if hashRate >= 100 {
+			hashRate /= 1000
+			valueStr = "KH/s"
+		}
+
+		if hashRate >= 100 {
+			hashRate /= 1000
+			valueStr = "MH/s"
+		}
+
+		logrus.Infof("Hash rate is %0.2g %s", hashRate, valueStr)
 	}
 
 	m.metricsLoggerRunning = false
