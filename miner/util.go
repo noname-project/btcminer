@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 
+	"gitlab.com/samli88/go-x11-hash"
 	"golang.org/x/crypto/scrypt"
 )
 
@@ -28,6 +29,12 @@ func scryptHash(data []byte) []byte {
 		panic(err)
 	}
 	return hashBytes
+}
+
+func x11Hash(data []byte) []byte {
+	out := make([]byte, 32)
+	x11.New().Hash(data, out)
+	return out
 }
 
 func restorePrevHashByteOrder(prevHash []byte) []byte {

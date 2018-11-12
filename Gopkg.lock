@@ -56,6 +56,29 @@
 
 [[projects]]
   branch = "master"
+  digest = "1:fbb84e27b327be2d15caf784a65c7a3473e834b1f2f01001e646f7b43550be6c"
+  name = "gitlab.com/samli88/go-x11-hash"
+  packages = [
+    ".",
+    "aesr",
+    "blake",
+    "bmw",
+    "cubehash",
+    "echo",
+    "groestl",
+    "hash",
+    "jh",
+    "keccak",
+    "luffa",
+    "shavite",
+    "simd",
+    "skein",
+  ]
+  pruneopts = "UT"
+  revision = "e5ce9e6dea1c78987f38bfee11920edea3c00d0b"
+
+[[projects]]
+  branch = "master"
   digest = "1:15e78183e2b04229a20cf384c2d911812970727ba34800fbe18cd35005a529fa"
   name = "golang.org/x/crypto"
   packages = [
@@ -92,6 +115,7 @@
     "github.com/boomstarternetwork/stratum",
     "github.com/sirupsen/logrus",
     "github.com/urfave/cli",
+    "gitlab.com/samli88/go-x11-hash",
     "golang.org/x/crypto/scrypt",
   ]
   solver-name = "gps-cdcl"

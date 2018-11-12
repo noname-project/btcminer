@@ -44,3 +44,7 @@
 [[constraint]]
   branch = "master"
   name = "github.com/boomstarternetwork/stratum"
+
+[[constraint]]
+  branch = "master"
+  name = "gitlab.com/samli88/go-x11-hash"
